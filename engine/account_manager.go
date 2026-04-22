@@ -15,7 +15,7 @@ type ProviderState struct {
 	available       []*types.Account
 	failed          []*types.Account
 	models          map[string]string // 该provider自己的model映射: 别名->真实模型名
-	rateLimiter     *core.RateLimiter
+	RateLimiter     *core.RateLimiter
 	retryIntervalMs int
 	currentIndex    int
 	mutex           sync.Mutex
@@ -24,7 +24,7 @@ type ProviderState struct {
 type AccountManager struct {
 	providers          map[string]*ProviderState
 	modelProviders     map[string][]string // model名称到provider名称列表的映射
-	modelProviderIndex map[string]int      // 每个model对应的provider轮询索引
+	modelProviderIndex map[string]int      // 每个model对应的provider索引
 	requestHandler     *core.RequestHandler
 }
 
@@ -49,6 +49,7 @@ func NewAccountManager(config *types.Config) *AccountManager {
 				APIKey:       apiKey,
 				Timeout:      provider.Timeout,
 				Proxy:        provider.Proxy,
+				Headers:      provider.Headers,
 				Status:       types.AccountStatusAvailable,
 				LastUsed:     time.Now(),
 			})
@@ -67,7 +68,7 @@ func NewAccountManager(config *types.Config) *AccountManager {
 			available:       accounts,
 			failed:          []*types.Account{},
 			models:          providerModels,
-			rateLimiter:     core.NewRateLimiter(rateLimit.MaxRequestsPerMinute, rateLimit.MinIntervalMs),
+			RateLimiter:     core.NewRateLimiter(rateLimit.MaxRequestsPerMinute, rateLimit.MinIntervalMs),
 			retryIntervalMs: rateLimit.RetryIntervalMs,
 			currentIndex:    0,
 		}
@@ -229,7 +230,7 @@ func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHand
 		return nil, nil, "", nil
 	}
 
-	ps.rateLimiter.Wait()
+	ps.RateLimiter.Wait()
 
 	account := am.GetNextAccount(providerName)
 	if account == nil {

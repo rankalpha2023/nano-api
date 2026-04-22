@@ -18,6 +18,9 @@ providers:
       defaultMaxTokens: 64000
     timeout: 30
     proxy: ""
+    headers:
+      User-Agent: "NanoAPI-Client/1.0"
+      X-Custom-Header: "custom-value"
   - name: nvidia
     base-url: https://integrate.api.nvidia.com/v1
     api-key-entries:

@@ -12,7 +12,7 @@ def test_stream(url="http://localhost:8080/v1/chat/completions"):
     }
 
     data = {
-        "model": "high",
+        "model": "high2",
         "messages": [
             {
                 "role": "user",

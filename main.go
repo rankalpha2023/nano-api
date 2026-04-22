@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"nano-api/config"
 	"nano-api/engine"
 	"nano-api/server"
+	"nano-api/types"
 )
 
 // maskAPIKey 对API-KEY进行打码处理
@@ -43,10 +43,10 @@ func main() {
 	}
 	log.Printf("Loading config from %s...", configPath)
 	
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := types.LoadConfig(configPath)
 	if err != nil {
 		log.Printf("Failed to load config: %v, using default config", err)
-		cfg = config.GetDefaultConfig()
+		cfg = types.GetDefaultConfig()
 	} else {
 		log.Println("Config loaded successfully")
 	}

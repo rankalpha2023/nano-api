@@ -21,7 +21,7 @@ func NewRequestHandler() *RequestHandler {
 }
 
 // SendRequest 发送请求到nvidia服务器
-func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequest, timeout int, proxy string) (*http.Response, error) {
+func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequest, timeout int, proxy string, headers map[string]string) (*http.Response, error) {
 	// 构建请求体
 	reqBody, err := json.Marshal(req)
 	if err != nil {
@@ -50,6 +50,11 @@ func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequ
 	// 设置请求头
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+	// 添加自定义请求头（会覆盖已有的头）
+	for key, value := range headers {
+		httpReq.Header.Set(key, value)
+	}
 
 	// 发送请求
 	return client.Do(httpReq)

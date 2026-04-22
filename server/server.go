@@ -46,18 +46,9 @@ func (s *Server) Start(port int) error {
 
 // handleChatCompletions 处理聊天完成请求
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
-	//log.Println("=== START handleChatCompletions ===")
-	//log.Println("Received client request")
-	//log.Printf("Request Method: %s", r.Method)
-	//log.Printf("Request Content-Type: %s", r.Header.Get("Content-Type"))
-	//log.Printf("Request Content-Length: %s", r.Header.Get("Content-Length"))
-	//log.Printf("Request Host: %s", r.Host)
-	//log.Printf("Request URL: %s", r.URL.String())
-	//log.Printf("Request RemoteAddr: %s", r.RemoteAddr)
-
 	// 确保日志立即输出
 	//log.SetFlags(log.LstdFlags | log.Lshortfile)
-	//log.Println("=== END START LOGS ===")
+	//log.Println("=== START handleChatCompletions ===")
 
 	// 检查请求方法
 	if r.Method == "OPTIONS" {
@@ -96,7 +87,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Empty request body", http.StatusBadRequest)
 		return
 	}
-	//log.Printf("Request body: %s", string(body))
 
 	// 重新创建请求体读取器
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
@@ -124,7 +114,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Using default max_tokens: %d", s.defaultMaxTokens)
 	}
 
-	log.Printf("Request received: model=%s, stream=%v, messages=%d, temperature=%f, top_p=%f, max_tokens=%d",
+	log.Printf("Request received: model=%s, stream=%v, messages=%d, temperature=%.2f, top_p=%.2f, max_tokens=%d",
 		req.Model, req.Stream, len(req.Messages), req.Temperature, req.TopP, req.MaxTokens)
 
 	// 发送请求（从可用帐号池中获取API-KEY）
@@ -158,7 +148,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		timeout = 30
 	}
 
-	resp, err := requestHandler.SendRequest(account.APIKey, account.BaseURL, &req, timeout, account.Proxy)
+	resp, err := requestHandler.SendRequest(account.APIKey, account.BaseURL, &req, timeout, account.Proxy, account.Headers)
 	if err != nil {
 		log.Printf("Error sending request to %s: %v", account.ProviderName, err)
 		// 标记帐号失败
