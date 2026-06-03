@@ -1,0 +1,48 @@
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+.trae
+ai-docs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Trae AI
+.trae/
+
+# Local config (contains sensitive data)
+config*.yaml
+!config.example.yaml
+
+*.exe
+*.log
+test*.py
+
+config.json
+REQ.md
+AGENTS.md
+
+# Logs
+*.log
+server.log
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+nano-api

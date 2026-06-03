@@ -1,0 +1,48 @@
+providers:
+  - name: opencode
+    base-url: https://opencode.ai/zen/v1
+    api-key-entries:
+      - your-opencode-api-key-1
+      - your-opencode-api-key-2
+    models:
+      high: minimax-m2.5-free
+      medium: nemotron-3-super-free
+      low: trinity-large-preview-free
+    rate-limit:
+      maxRequestsPerMinute: 40
+      minIntervalMs: 100
+      retryIntervalMs: 5000
+    model-config:
+      defaultTemperature: 0.1
+      defaultTopP: 1.0
+      defaultMaxTokens: 64000
+    timeout: 30
+    proxy: ""
+    headers:
+      User-Agent: "NanoAPI-Client/1.0"
+      X-Custom-Header: "custom-value"
+  - name: nvidia
+    base-url: https://integrate.api.nvidia.com/v1
+    api-key-entries:
+      - your-nvidia-api-key-1
+      - your-nvidia-api-key-2
+    models:
+      high: z-ai/glm-5.1
+      medium: z-ai/glm-4
+      low: z-ai/glm-3.1
+    rate-limit:
+      maxRequestsPerMinute: 40
+      minIntervalMs: 100
+      retryIntervalMs: 5000
+    model-config:
+      defaultTemperature: 0.1
+      defaultTopP: 1.0
+      defaultMaxTokens: 64000
+    timeout: 120
+    proxy: ""  # e.g. "http://localhost:16808"
+port: 8080
+request-retry: 3
+rate-limit:
+  maxRequestsPerMinute: 40
+  minIntervalMs: 100
+  retryIntervalMs: 5000
