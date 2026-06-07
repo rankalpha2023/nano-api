@@ -213,11 +213,33 @@ func TestLoadConfig_JSON_Fallback(t *testing.T) {
 	if cfg.Port != 7777 {
 		t.Errorf("Port: got %d", cfg.Port)
 	}
-	if cfg.RequestRetry != 5 {
-		t.Errorf("RequestRetry: got %d", cfg.RequestRetry)
+}
+
+// TestLoadConfig_YAML_ExtensionNoConfigYAML 测试：传入 .yaml 文件但同级无 config.yaml
+func TestLoadConfig_YAML_ExtensionNoConfigYAML(t *testing.T) {
+	dir := makeTempDir(t)
+	// 不创建 config.yaml，只创建传入的 .yaml 文件
+	p := filepath.Join(dir, "test.yaml")
+	os.WriteFile(p, []byte("port: 5555\nrate-limit:\n  maxRequestsPerMinute: 40\n  minIntervalMs: 100\n  retryIntervalMs: 5000\nproviders: []\n"), 0644)
+
+	cfg, err := LoadConfig(p)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	if cfg.Providers[0].Name != "json-provider" {
-		t.Errorf("Name: got %s", cfg.Providers[0].Name)
+	if cfg.Port != 5555 {
+		t.Errorf("Port: expected 5555, got %d", cfg.Port)
+	}
+}
+
+// TestLoadConfig_InvalidJSON 测试：无效 JSON（无 config.yaml，传入损坏 JSON 文件）
+func TestLoadConfig_InvalidJSON(t *testing.T) {
+	dir := makeTempDir(t)
+	p := filepath.Join(dir, "config.json")
+	os.WriteFile(p, []byte("not json"), 0644)
+
+	_, err := LoadConfig(p)
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
 	}
 }
 

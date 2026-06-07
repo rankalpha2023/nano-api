@@ -229,3 +229,91 @@ func TestNewRequestHandler_NotNil(t *testing.T) {
 		t.Fatal("Expected non-nil handler")
 	}
 }
+
+// ============================================================
+// 补充覆盖率：SendRequest 错误路径
+// ============================================================
+
+func TestSendRequest_ConnectionRefused(t *testing.T) {
+	handler := core.NewRequestHandler()
+	req := &types.ChatRequest{Model: "test"}
+
+	// 未监听的端口
+	_, err := handler.SendRequest("key", "http://127.0.0.1:1", req, 1, "", nil, nil)
+	if err == nil {
+		t.Error("Expected connection error")
+	}
+}
+
+func TestSendRequest_WithValidProxyIgnored(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer mock.Close()
+
+	handler := core.NewRequestHandler()
+	req := &types.ChatRequest{Model: "test"}
+
+	// 传入一个无法解析的 proxy — 应该被忽略
+	_, err := handler.SendRequest("key", mock.URL, req, 10, "://invalid", nil, nil)
+	if err != nil {
+		t.Fatalf("Broken proxy should not cause error: %v", err)
+	}
+}
+
+func TestStreamResponse_EmptyBody(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(``))
+	}))
+	defer mock.Close()
+
+	resp, _ := http.Get(mock.URL)
+	handler := core.NewRequestHandler()
+
+	err := handler.StreamResponse(resp, func(choice *types.Choice) error {
+		return nil
+	})
+	// EOF → 正常结束
+	if err != nil {
+		t.Errorf("Empty body should not error: %v", err)
+	}
+}
+
+func TestStreamResponse_CallbackError(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"choices":[{"delta":{"content":"test"},"index":0}]}`+"\n")
+	}))
+	defer mock.Close()
+
+	resp, _ := http.Get(mock.URL)
+	handler := core.NewRequestHandler()
+
+	err := handler.StreamResponse(resp, func(choice *types.Choice) error {
+		return fmt.Errorf("callback abort")
+	})
+	if err == nil {
+		t.Error("Expected callback error to propagate")
+	}
+}
+
+func TestSendRequest_ExtraFieldsNil(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer mock.Close()
+
+	handler := core.NewRequestHandler()
+	req := &types.ChatRequest{Model: "test", Messages: []types.Message{{Role: "user", Content: "hi"}}}
+
+	// extraFields=nil 走快速路径
+	_, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, nil)
+	if err != nil {
+		t.Fatalf("SendRequest with nil extraFields: %v", err)
+	}
+
+	// extraFields 空 map 也走快速路径
+	_, err = handler.SendRequest("key", mock.URL, req, 10, "", nil, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("SendRequest with empty extraFields: %v", err)
+	}
+}
