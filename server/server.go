@@ -12,6 +12,42 @@ import (
 	"nano-api/types"
 )
 
+// handleListModels 处理 /v1/models 请求
+func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
+	// OPTIONS 预检请求
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "GET" {
+		log.Printf("Error: Invalid request method for /v1/models: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	models := s.accountManager.GetAllModels()
+	resp := types.ModelListResponse{
+		Object: "list",
+		Data:   models,
+	}
+
+	body, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Error marshaling model list: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(body)
+	log.Printf("GET /v1/models returned %d models", len(models))
+}
+
 // Server HTTP服务器
 type Server struct {
 	accountManager *engine.AccountManager
@@ -28,6 +64,7 @@ func (s *Server) Start(port int) error {
 	// 注册路由
 	log.Println("Registering routes...")
 	http.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
+	http.HandleFunc("/v1/models", s.handleListModels)
 
 	// 启动服务器
 	serverAddr := fmt.Sprintf(":%d", port)

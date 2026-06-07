@@ -38,23 +38,46 @@ func NewAccountManager(config *types.Config) *AccountManager {
 
 	for _, provider := range config.Providers {
 		rateLimit := provider.RateLimit
-		if rateLimit.MaxRequestsPerMinute == 0 && rateLimit.MinIntervalMs == 0 {
-			rateLimit = defaultRateLimit
+		// 逐字段继承全局默认值（如果 provider 未设置）
+		if rateLimit.MaxRequestsPerMinute == 0 {
+			rateLimit.MaxRequestsPerMinute = defaultRateLimit.MaxRequestsPerMinute
+		}
+		if rateLimit.MinIntervalMs == 0 {
+			rateLimit.MinIntervalMs = defaultRateLimit.MinIntervalMs
+		}
+		if rateLimit.RetryIntervalMs == 0 {
+			rateLimit.RetryIntervalMs = defaultRateLimit.RetryIntervalMs
 		}
 
 		var accounts []*types.Account
 		for _, apiKey := range provider.APIKeyEntries {
+			timeout := provider.Timeout
+			if timeout == 0 {
+				timeout = config.GlobalTimeout
+			}
 			accounts = append(accounts, &types.Account{
 				ProviderName: provider.Name,
 				BaseURL:      provider.BaseURL,
 				APIKey:       apiKey,
-				Timeout:      provider.Timeout,
+				Timeout:      timeout,
 				Proxy:        provider.Proxy,
 				Headers:      provider.Headers,
 				ExtraFields:  provider.ExtraFields,
 				Status:       types.AccountStatusAvailable,
 				LastUsed:     time.Now(),
 			})
+		}
+
+		// ModelConfig: 逐字段从全局继承
+		modelConfig := provider.ModelConfig
+		if modelConfig.DefaultTemperature == 0 {
+			modelConfig.DefaultTemperature = config.GlobalModelConfig.DefaultTemperature
+		}
+		if modelConfig.DefaultTopP == 0 {
+			modelConfig.DefaultTopP = config.GlobalModelConfig.DefaultTopP
+		}
+		if modelConfig.DefaultMaxTokens == 0 {
+			modelConfig.DefaultMaxTokens = config.GlobalModelConfig.DefaultMaxTokens
 		}
 
 		providerModels := make(map[string]string)
@@ -73,7 +96,7 @@ func NewAccountManager(config *types.Config) *AccountManager {
 			RateLimiter:     core.NewRateLimiter(rateLimit.MaxRequestsPerMinute, rateLimit.MinIntervalMs),
 			retryIntervalMs: rateLimit.RetryIntervalMs,
 			currentIndex:    0,
-			ModelConfig:     provider.ModelConfig,
+			ModelConfig:     modelConfig,
 		}
 	}
 
@@ -249,4 +272,42 @@ func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHand
 	}
 
 	return am.requestHandler, account, realModel, nil
+}
+
+// GetAllModels 收集所有 provider 的公开模型列表
+func (am *AccountManager) GetAllModels() []types.ModelInfo {
+	now := time.Now().Unix()
+	seen := make(map[string]bool)
+	var models []types.ModelInfo
+
+	for providerName, ps := range am.providers {
+		ps.mutex.Lock()
+		for alias := range ps.models {
+			if !seen[alias] {
+				seen[alias] = true
+				models = append(models, types.ModelInfo{
+					ID:      alias,
+					Object:  "model",
+					Created: now,
+					OwnedBy: providerName,
+				})
+			}
+		}
+		ps.mutex.Unlock()
+	}
+
+	if models == nil {
+		models = []types.ModelInfo{}
+	}
+	return models
+}
+
+// GetProviderState 获取指定 provider 的状态（供测试使用）
+func (am *AccountManager) GetProviderState(providerName string) *ProviderState {
+	return am.providers[providerName]
+}
+
+// GetRetryInterval 获取 provider 的重试间隔（供测试使用）
+func (ps *ProviderState) GetRetryInterval() int {
+	return ps.retryIntervalMs
 }

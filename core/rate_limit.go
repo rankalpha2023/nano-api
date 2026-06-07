@@ -42,3 +42,13 @@ func (r *RateLimiter) Wait() {
 	// 更新最后请求时间
 	r.lastRequest = time.Now()
 }
+
+// MinInterval 暴露最小间隔（供测试使用）
+func (r *RateLimiter) MinInterval() time.Duration {
+	return r.minInterval
+}
+
+// MaxRequestsPerMinute 暴露每分钟最大请求数（供测试使用）
+func (r *RateLimiter) MaxRequestsPerMinute() int {
+	return int(r.limiter.Limit() * 60)
+}
