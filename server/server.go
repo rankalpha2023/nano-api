@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"nano-api/engine"
 	"nano-api/types"
@@ -76,6 +77,8 @@ func (s *Server) Start(port int) error {
 
 // handleChatCompletions 处理聊天完成请求
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	// 记录全链路开始时间
+	totalStart := time.Now()
 	// 确保日志立即输出
 	//log.SetFlags(log.LstdFlags | log.Lshortfile)
 	//log.Println("=== START handleChatCompletions ===")
@@ -134,7 +137,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		req.Model, req.Stream, len(req.Messages), req.Temperature, req.TopP, req.MaxTokens)
 
 	log.Println("Getting account from account manager...")
-	requestHandler, account, realModel, err := s.accountManager.SendRequest(&req)
+	requestHandler, account, realModel, rateLimitWait, err := s.accountManager.SendRequest(&req)
 	if err != nil {
 		log.Printf("Error getting account: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -177,7 +180,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		timeout = 30
 	}
 
-	resp, err := requestHandler.SendRequest(account.APIKey, account.BaseURL, &req, timeout, account.Proxy, account.Headers, account.ExtraFields)
+	resp, metrics, err := requestHandler.SendRequest(account.APIKey, account.BaseURL, &req, timeout, account.Proxy, account.Headers, account.ExtraFields)
 	if err != nil {
 		log.Printf("Error sending request to %s: %v", account.ProviderName, err)
 		// 标记帐号失败
@@ -213,11 +216,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if req.Stream {
 		log.Println("Handling streaming response")
 		// 直接转发流式响应
+		var streamedBytes int64
 		buf := make([]byte, 1024)
 		for {
 			n, err := resp.Body.Read(buf)
 			if n > 0 {
 				w.Write(buf[:n])
+				streamedBytes += int64(n)
 				if flusher, ok := w.(http.Flusher); ok {
 					flusher.Flush()
 				}
@@ -226,21 +231,35 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+		resp.Body.Close()
+
+		totalElapsed := time.Since(totalStart)
+		log.Printf("[Metrics] provider=%s model=%s stream=true req_bytes=%d resp_bytes=%d rate_limit_wait=%v remote=%v total=%v",
+			account.ProviderName, req.Model, metrics.RequestBytes, streamedBytes,
+			rateLimitWait, metrics.RemoteLatency, totalElapsed)
+		log.Println("Request processed successfully")
+		return
 	} else {
 		log.Println("Handling non-streaming response")
 		// 处理非流式响应
+		var nstreamBytes int64
 		buf := make([]byte, 1024)
 		for {
 			n, err := resp.Body.Read(buf)
 			if n > 0 {
 				w.Write(buf[:n])
+				nstreamBytes += int64(n)
 			}
 			if err != nil {
 				break
 			}
 		}
-	}
+		resp.Body.Close()
 
-	resp.Body.Close()
-	log.Println("Request processed successfully")
+		totalElapsed := time.Since(totalStart)
+		log.Printf("[Metrics] provider=%s model=%s stream=false req_bytes=%d resp_bytes=%d rate_limit_wait=%v remote=%v total=%v",
+			account.ProviderName, req.Model, metrics.RequestBytes, nstreamBytes,
+			rateLimitWait, metrics.RemoteLatency, totalElapsed)
+		log.Println("Request processed successfully")
+	}
 }

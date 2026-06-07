@@ -245,13 +245,13 @@ func (am *AccountManager) GetModelConfig(providerName string) types.ModelConfig 
 	return ps.ModelConfig
 }
 
-func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHandler, *types.Account, string, error) {
+func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHandler, *types.Account, string, time.Duration, error) {
 	modelName := req.Model
 
 	providerName := am.GetNextProviderForModel(modelName)
 	if providerName == "" {
 		log.Printf("No available provider for model: %s", modelName)
-		return nil, nil, "", nil
+		return nil, nil, "", 0, nil
 	}
 
 	realModel := am.GetRealModelName(providerName, modelName)
@@ -261,17 +261,17 @@ func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHand
 
 	ps, ok := am.providers[providerName]
 	if !ok {
-		return nil, nil, "", nil
+		return nil, nil, "", 0, nil
 	}
 
-	ps.RateLimiter.Wait()
+	rateLimitWait := ps.RateLimiter.Wait()
 
 	account := am.GetNextAccount(providerName)
 	if account == nil {
-		return nil, nil, "", nil
+		return nil, nil, "", 0, nil
 	}
 
-	return am.requestHandler, account, realModel, nil
+	return am.requestHandler, account, realModel, rateLimitWait, nil
 }
 
 // GetAllModels 收集所有 provider 的公开模型列表

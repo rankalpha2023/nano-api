@@ -425,7 +425,7 @@ func TestSendRequest_Success(t *testing.T) {
 	}
 	am := NewAccountManager(cfg)
 
-	handler, account, realModel, err := am.SendRequest(&types.ChatRequest{
+	handler, account, realModel, _, err := am.SendRequest(&types.ChatRequest{
 		Model:    "m1",
 		Messages: []types.Message{{Role: "user", Content: "hi"}},
 	})
@@ -459,12 +459,12 @@ func TestSendRequest_ModelNotFound(t *testing.T) {
 	}
 	am := NewAccountManager(cfg)
 
-	_, _, _, err := am.SendRequest(&types.ChatRequest{
+	_, _, _, _, err := am.SendRequest(&types.ChatRequest{
 		Model: "nonexistent",
 	})
 	// 当前代码返回 nil error + nil handler（隐式）
 	if err == nil {
-		handler, account, _, err2 := am.SendRequest(&types.ChatRequest{Model: "nonexistent"})
+		handler, account, _, _, err2 := am.SendRequest(&types.ChatRequest{Model: "nonexistent"})
 		_ = handler
 		_ = account
 		_ = err2
@@ -488,7 +488,7 @@ func TestSendRequest_AllAccountFailed(t *testing.T) {
 	a := am.GetNextAccount("p1")
 	am.MarkAccountFailed(a)
 
-	handler, account, _, err := am.SendRequest(&types.ChatRequest{
+	handler, account, _, _, err := am.SendRequest(&types.ChatRequest{
 		Model:    "m1",
 		Messages: []types.Message{{Role: "user", Content: "hi"}},
 	})

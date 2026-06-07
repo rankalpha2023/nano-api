@@ -13,6 +13,12 @@ import (
 	"nano-api/types"
 )
 
+// RequestMetrics 单次远程请求的性能指标
+type RequestMetrics struct {
+	RequestBytes  int           // 出站请求体字节数
+	RemoteLatency time.Duration // 从 client.Do 发出到收到 HTTP 响应的耗时
+}
+
 // RequestHandler 请求处理器
 type RequestHandler struct {
 }
@@ -22,12 +28,12 @@ func NewRequestHandler() *RequestHandler {
 	return &RequestHandler{}
 }
 
-// SendRequest 发送请求到目标服务器
-func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequest, timeout int, proxy string, headers map[string]string, extraFields map[string]interface{}) (*http.Response, error) {
+// SendRequest 发送请求到目标服务器，同时返回性能指标
+func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequest, timeout int, proxy string, headers map[string]string, extraFields map[string]interface{}) (*http.Response, *RequestMetrics, error) {
 	// 构建请求体（包含 ExtraFields 合并逻辑）
 	reqBody, err := h.buildRequestBody(req, extraFields)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 创建HTTP客户端
@@ -46,7 +52,7 @@ func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequ
 	// 创建HTTP请求
 	httpReq, err := http.NewRequest("POST", baseURL+"/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 设置请求头
@@ -58,8 +64,17 @@ func (h *RequestHandler) SendRequest(apiKey, baseURL string, req *types.ChatRequ
 		httpReq.Header.Set(key, value)
 	}
 
-	// 发送请求
-	return client.Do(httpReq)
+	// 记录性能指标
+	metrics := &RequestMetrics{
+		RequestBytes: len(reqBody),
+	}
+
+	// 发送请求并计时
+	start := time.Now()
+	resp, err := client.Do(httpReq)
+	metrics.RemoteLatency = time.Since(start)
+
+	return resp, metrics, err
 }
 
 // buildRequestBody 构建请求体，合并 ExtraFields 到 ChatRequest

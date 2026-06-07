@@ -40,7 +40,7 @@ func TestSendRequest_Basic(t *testing.T) {
 		Messages: []types.Message{{Role: "user", Content: "hi"}},
 	}
 
-	resp, err := handler.SendRequest("test-key", mock.URL, req, 10, "", nil, nil)
+	resp, _, err := handler.SendRequest("test-key", mock.URL, req, 10, "", nil, nil)
 	if err != nil {
 		t.Fatalf("SendRequest failed: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSendRequest_CustomHeaders(t *testing.T) {
 	req := &types.ChatRequest{Model: "test"}
 	customHeaders := map[string]string{"X-Custom": "custom-value"}
 
-	_, err := handler.SendRequest("test-key", mock.URL, req, 10, "", customHeaders, nil)
+	_, _, err := handler.SendRequest("test-key", mock.URL, req, 10, "", customHeaders, nil)
 	if err != nil {
 		t.Fatalf("SendRequest failed: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestSendRequest_Proxy(t *testing.T) {
 	req := &types.ChatRequest{Model: "test"}
 
 	// 传入空字符串 proxy — 不使用代理
-	_, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, nil)
+	_, _, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, nil)
 	if err != nil {
 		t.Errorf("SendRequest with empty proxy failed: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestSendRequest_InvalidURL(t *testing.T) {
 	req := &types.ChatRequest{Model: "test"}
 
 	// 无效 URL: 包含空格
-	_, err := handler.SendRequest("key", "http://\x7f.invalid", req, 10, "", nil, nil)
+	_, _, err := handler.SendRequest("key", "http://\x7f.invalid", req, 10, "", nil, nil)
 	if err == nil {
 		t.Error("Expected error for invalid URL")
 	}
@@ -114,7 +114,7 @@ func TestSendRequest_Timeout(t *testing.T) {
 
 	// timeout=1 秒，mock 睡眠 2 秒 → 超时
 	start := time.Now()
-	_, err := handler.SendRequest("key", mock.URL, req, 1, "", nil, nil)
+	_, _, err := handler.SendRequest("key", mock.URL, req, 1, "", nil, nil)
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -139,7 +139,7 @@ func TestSendRequest_ExtraFieldsMerged(t *testing.T) {
 	req := &types.ChatRequest{Model: "test"}
 	extraFields := map[string]interface{}{"thinking_enabled": true}
 
-	_, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, extraFields)
+	_, _, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, extraFields)
 	if err != nil {
 		t.Fatalf("SendRequest failed: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestSendRequest_ConnectionRefused(t *testing.T) {
 	req := &types.ChatRequest{Model: "test"}
 
 	// 未监听的端口
-	_, err := handler.SendRequest("key", "http://127.0.0.1:1", req, 1, "", nil, nil)
+	_, _, err := handler.SendRequest("key", "http://127.0.0.1:1", req, 1, "", nil, nil)
 	if err == nil {
 		t.Error("Expected connection error")
 	}
@@ -255,7 +255,7 @@ func TestSendRequest_WithValidProxyIgnored(t *testing.T) {
 	req := &types.ChatRequest{Model: "test"}
 
 	// 传入一个无法解析的 proxy — 应该被忽略
-	_, err := handler.SendRequest("key", mock.URL, req, 10, "://invalid", nil, nil)
+	_, _, err := handler.SendRequest("key", mock.URL, req, 10, "://invalid", nil, nil)
 	if err != nil {
 		t.Fatalf("Broken proxy should not cause error: %v", err)
 	}
@@ -306,13 +306,13 @@ func TestSendRequest_ExtraFieldsNil(t *testing.T) {
 	req := &types.ChatRequest{Model: "test", Messages: []types.Message{{Role: "user", Content: "hi"}}}
 
 	// extraFields=nil 走快速路径
-	_, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, nil)
+	_, _, err := handler.SendRequest("key", mock.URL, req, 10, "", nil, nil)
 	if err != nil {
 		t.Fatalf("SendRequest with nil extraFields: %v", err)
 	}
 
 	// extraFields 空 map 也走快速路径
-	_, err = handler.SendRequest("key", mock.URL, req, 10, "", nil, map[string]interface{}{})
+	_, _, err = handler.SendRequest("key", mock.URL, req, 10, "", nil, map[string]interface{}{})
 	if err != nil {
 		t.Fatalf("SendRequest with empty extraFields: %v", err)
 	}

@@ -28,19 +28,22 @@ func NewRateLimiter(maxRequestsPerMinute, minIntervalMs int) *RateLimiter {
 	}
 }
 
-// Wait 等待直到可以发送请求
-func (r *RateLimiter) Wait() {
+// Wait 等待直到可以发送请求，返回限流等待的总时长（含令牌等待 + 最小间隔等待）
+func (r *RateLimiter) Wait() time.Duration {
+	waitStart := time.Now()
+
 	// 等待令牌桶有可用令牌
 	r.limiter.Wait(context.Background())
-	
+
 	// 确保最小发送时间间隔
 	elapsed := time.Since(r.lastRequest)
 	if elapsed < r.minInterval {
 		time.Sleep(r.minInterval - elapsed)
 	}
-	
+
 	// 更新最后请求时间
 	r.lastRequest = time.Now()
+	return time.Since(waitStart)
 }
 
 // MinInterval 暴露最小间隔（供测试使用）
