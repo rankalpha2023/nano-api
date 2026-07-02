@@ -67,8 +67,10 @@ func TestHandleListModels_GET(t *testing.T) {
 	if body.Object != "list" {
 		t.Errorf("Expected 'list', got '%s'", body.Object)
 	}
+	// 模型列表完全由配置决定，不注入任何硬编码模型。
+	// 配置了两个 provider 都有 "gpt-4" 别名，dedup 后应为 1 个。
 	if len(body.Data) != 1 {
-		t.Errorf("Expected 1 model (dedup), got %d", len(body.Data))
+		t.Errorf("Expected 1 model (gpt-4 deduped), got %d", len(body.Data))
 	}
 }
 

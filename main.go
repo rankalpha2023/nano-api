@@ -4,23 +4,12 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 
+	"nano-api/config"
+	"nano-api/core"
 	"nano-api/engine"
 	"nano-api/server"
-	"nano-api/types"
 )
-
-// maskAPIKey 对API-KEY进行打码处理
-func maskAPIKey(apiKey string) string {
-	if len(apiKey) <= 8 {
-		return apiKey
-	}
-	prefix := apiKey[:4]
-	suffix := apiKey[len(apiKey)-4:]
-	stars := strings.Repeat("*", len(apiKey)-8)
-	return prefix + stars + suffix
-}
 
 func main() {
 	// 设置日志输出到文件
@@ -34,6 +23,9 @@ func main() {
 		defer logFile.Close()
 	}
 
+	// 启用微秒级时间戳，便于排查连接级立即失败与超时失败
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
 	log.Println("Starting server...")
 	
 	// 加载配置
@@ -43,10 +35,10 @@ func main() {
 	}
 	log.Printf("Loading config from %s...", configPath)
 	
-	cfg, err := types.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		log.Printf("Failed to load config: %v, using default config", err)
-		cfg = types.GetDefaultConfig()
+		cfg = config.GetDefaultConfig()
 	} else {
 		log.Println("Config loaded successfully")
 	}
@@ -54,7 +46,7 @@ func main() {
 	for i, provider := range cfg.Providers {
 		log.Printf("Provider %d: %s, BaseURL: %s, APIKeys: %d", i+1, provider.Name, provider.BaseURL, len(provider.APIKeyEntries))
 		for j, apiKey := range provider.APIKeyEntries {
-			log.Printf("  APIKey %d: %s", j+1, maskAPIKey(apiKey))
+			log.Printf("  APIKey %d: %s", j+1, core.MaskAPIKey(apiKey))
 		}
 	}
 	

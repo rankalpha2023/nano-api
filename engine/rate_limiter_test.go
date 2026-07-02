@@ -1,15 +1,15 @@
-package core_test
+package engine_test
 
 import (
 	"testing"
 	"time"
 
-	"nano-api/core"
+	"nano-api/engine"
 )
 
 func TestRateLimiter(t *testing.T) {
 	// 创建限流管理器，每分钟最多10个请求，最小间隔100ms
-	limiter := core.NewRateLimiter(10, 100)
+	limiter := engine.NewRateLimiter(10, 100)
 
 	// 测试10个请求的时间
 	start := time.Now()
@@ -25,7 +25,7 @@ func TestRateLimiter(t *testing.T) {
 }
 
 func TestRateLimiter_Accessors(t *testing.T) {
-	limiter := core.NewRateLimiter(30, 250)
+	limiter := engine.NewRateLimiter(30, 250)
 
 	if mi := limiter.MinInterval(); mi != 250*time.Millisecond {
 		t.Errorf("MinInterval: expected 250ms, got %v", mi)
@@ -36,7 +36,7 @@ func TestRateLimiter_Accessors(t *testing.T) {
 }
 
 func TestRateLimiter_ZeroValues(t *testing.T) {
-	limiter := core.NewRateLimiter(0, 0)
+	limiter := engine.NewRateLimiter(0, 0)
 
 	if mi := limiter.MinInterval(); mi != 0 {
 		t.Errorf("MinInterval with 0 input: expected 0, got %v", mi)

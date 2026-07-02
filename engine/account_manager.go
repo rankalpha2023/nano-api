@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"nano-api/core"
 	"nano-api/types"
 )
 
@@ -15,7 +14,7 @@ type ProviderState struct {
 	available       []*types.Account
 	failed          []*types.Account
 	models          map[string]string
-	RateLimiter     *core.RateLimiter
+	RateLimiter     *RateLimiter
 	retryIntervalMs int
 	currentIndex    int
 	ModelConfig     types.ModelConfig
@@ -26,7 +25,7 @@ type AccountManager struct {
 	providers          map[string]*ProviderState
 	modelProviders     map[string][]string // model名称到provider名称列表的映射
 	modelProviderIndex map[string]int      // 每个model对应的provider索引
-	requestHandler     *core.RequestHandler
+	requestHandler     *RequestHandler
 }
 
 func NewAccountManager(config *types.Config) *AccountManager {
@@ -93,7 +92,7 @@ func NewAccountManager(config *types.Config) *AccountManager {
 			available:       accounts,
 			failed:          []*types.Account{},
 			models:          providerModels,
-			RateLimiter:     core.NewRateLimiter(rateLimit.MaxRequestsPerMinute, rateLimit.MinIntervalMs),
+			RateLimiter:     NewRateLimiter(rateLimit.MaxRequestsPerMinute, rateLimit.MinIntervalMs),
 			retryIntervalMs: rateLimit.RetryIntervalMs,
 			currentIndex:    0,
 			ModelConfig:     modelConfig,
@@ -109,7 +108,7 @@ func NewAccountManager(config *types.Config) *AccountManager {
 		providers:          providers,
 		modelProviders:     modelProviders,
 		modelProviderIndex: modelProviderIndex,
-		requestHandler:     core.NewRequestHandler(),
+		requestHandler:     NewRequestHandlerWithRetry(config.RequestRetry),
 	}
 }
 
@@ -245,7 +244,7 @@ func (am *AccountManager) GetModelConfig(providerName string) types.ModelConfig 
 	return ps.ModelConfig
 }
 
-func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHandler, *types.Account, string, time.Duration, error) {
+func (am *AccountManager) SendRequest(req *types.ChatRequest) (*RequestHandler, *types.Account, string, time.Duration, error) {
 	modelName := req.Model
 
 	providerName := am.GetNextProviderForModel(modelName)
@@ -274,7 +273,17 @@ func (am *AccountManager) SendRequest(req *types.ChatRequest) (*core.RequestHand
 	return am.requestHandler, account, realModel, rateLimitWait, nil
 }
 
-// GetAllModels 收集所有 provider 的公开模型列表
+// GetAllModels 收集所有 provider 的公开模型列表。
+//
+// 模型列表完全由配置决定（ProviderConfig.Models 中的 alias），
+// 不注入任何硬编码模型 ID。若需让网关对外暴露特定模型名（如 Claude 别名），
+// 请在配置文件中通过 models 字段显式声明，例如：
+//
+//	providers:
+//	  - name: deepseek
+//	    models:
+//	      claude-sonnet-4-6: deepseek-v4-pro
+//	      claude-haiku-4-5:  deepseek-v4-pro
 func (am *AccountManager) GetAllModels() []types.ModelInfo {
 	now := time.Now().Unix()
 	seen := make(map[string]bool)
@@ -286,10 +295,11 @@ func (am *AccountManager) GetAllModels() []types.ModelInfo {
 			if !seen[alias] {
 				seen[alias] = true
 				models = append(models, types.ModelInfo{
-					ID:      alias,
-					Object:  "model",
-					Created: now,
-					OwnedBy: providerName,
+					ID:          alias,
+					Object:      "model",
+					Created:     now,
+					OwnedBy:     providerName,
+					DisplayName: alias,
 				})
 			}
 		}
@@ -310,4 +320,18 @@ func (am *AccountManager) GetProviderState(providerName string) *ProviderState {
 // GetRetryInterval 获取 provider 的重试间隔（供测试使用）
 func (ps *ProviderState) GetRetryInterval() int {
 	return ps.retryIntervalMs
+}
+
+// AvailableCountForTest 返回可用账户数量（供测试使用）
+func (ps *ProviderState) AvailableCountForTest() int {
+	ps.mutex.Lock()
+	defer ps.mutex.Unlock()
+	return len(ps.available)
+}
+
+// FailedCountForTest 返回失败账户数量（供测试使用）
+func (ps *ProviderState) FailedCountForTest() int {
+	ps.mutex.Lock()
+	defer ps.mutex.Unlock()
+	return len(ps.failed)
 }

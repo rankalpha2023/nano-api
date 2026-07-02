@@ -10,7 +10,6 @@ import (
 
 // TestBuildRequestBody_NoExtraFields 测试无 ExtraFields 时的快速路径
 func TestBuildRequestBody_NoExtraFields(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{
 		Model: "test-model",
 		Messages: []types.Message{
@@ -18,7 +17,7 @@ func TestBuildRequestBody_NoExtraFields(t *testing.T) {
 		},
 	}
 
-	body, err := handler.BuildRequestBodyForTest(req, nil)
+	body, err := core.BuildRequestBody(req, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -39,7 +38,6 @@ func TestBuildRequestBody_NoExtraFields(t *testing.T) {
 
 // TestBuildRequestBody_WithBasicTypes 测试基础类型支持
 func TestBuildRequestBody_WithBasicTypes(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	extraFields := map[string]interface{}{
@@ -49,7 +47,7 @@ func TestBuildRequestBody_WithBasicTypes(t *testing.T) {
 		"string_field": "hello",
 	}
 
-	body, err := handler.BuildRequestBodyForTest(req, extraFields)
+	body, err := core.BuildRequestBody(req, extraFields)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -78,7 +76,6 @@ func TestBuildRequestBody_WithBasicTypes(t *testing.T) {
 
 // TestBuildRequestBody_OverrideStandardField 测试 ExtraFields 覆盖标准字段
 func TestBuildRequestBody_OverrideStandardField(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{
 		Model:       "original-model",
 		Temperature: 0.5,
@@ -89,7 +86,7 @@ func TestBuildRequestBody_OverrideStandardField(t *testing.T) {
 		"temperature": 1.0,
 	}
 
-	body, _ := handler.BuildRequestBodyForTest(req, extraFields)
+	body, _ := core.BuildRequestBody(req, extraFields)
 
 	var result map[string]interface{}
 	json.Unmarshal(body, &result)
@@ -105,7 +102,6 @@ func TestBuildRequestBody_OverrideStandardField(t *testing.T) {
 
 // TestBuildRequestBody_ComplexTypes 测试嵌套对象和数组
 func TestBuildRequestBody_ComplexTypes(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	extraFields := map[string]interface{}{
@@ -116,7 +112,7 @@ func TestBuildRequestBody_ComplexTypes(t *testing.T) {
 		"array_field": []interface{}{"a", "b", "c"},
 	}
 
-	body, _ := handler.BuildRequestBodyForTest(req, extraFields)
+	body, _ := core.BuildRequestBody(req, extraFields)
 
 	var result map[string]interface{}
 	json.Unmarshal(body, &result)
@@ -142,7 +138,6 @@ func TestBuildRequestBody_ComplexTypes(t *testing.T) {
 
 // TestBuildRequestBody_PreservesOriginalFields 测试保留原始字段
 func TestBuildRequestBody_PreservesOriginalFields(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{
 		Model:       "gpt-4",
 		Temperature: 0.7,
@@ -157,7 +152,7 @@ func TestBuildRequestBody_PreservesOriginalFields(t *testing.T) {
 		"custom_field": "custom_value",
 	}
 
-	body, _ := handler.BuildRequestBodyForTest(req, extraFields)
+	body, _ := core.BuildRequestBody(req, extraFields)
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -188,12 +183,11 @@ func TestBuildRequestBody_PreservesOriginalFields(t *testing.T) {
 
 // TestBuildRequestBody_EmptyExtraFields 测试空的 ExtraFields
 func TestBuildRequestBody_EmptyExtraFields(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	extraFields := map[string]interface{}{}
 
-	body, err := handler.BuildRequestBodyForTest(req, extraFields)
+	body, err := core.BuildRequestBody(req, extraFields)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -208,18 +202,17 @@ func TestBuildRequestBody_EmptyExtraFields(t *testing.T) {
 
 // TestBuildRequestBody_MultipleExtraFields 测试多个额外字段
 func TestBuildRequestBody_MultipleExtraFields(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{Model: "deepseek-v4"}
 
 	extraFields := map[string]interface{}{
-		"thinking_enabled":      true,
-		"custom_param":          "value1",
-		"another_flag":          false,
-		"numeric_value":         100,
-		"floating_point":        2.5,
+		"thinking_enabled": true,
+		"custom_param":     "value1",
+		"another_flag":     false,
+		"numeric_value":    100,
+		"floating_point":   2.5,
 	}
 
-	body, _ := handler.BuildRequestBodyForTest(req, extraFields)
+	body, _ := core.BuildRequestBody(req, extraFields)
 
 	var result map[string]interface{}
 	json.Unmarshal(body, &result)
@@ -241,7 +234,6 @@ func TestBuildRequestBody_MultipleExtraFields(t *testing.T) {
 
 // TestBuildRequestBody_JsonStructure 验证输出是有效的 JSON
 func TestBuildRequestBody_JsonStructure(t *testing.T) {
-	handler := core.NewRequestHandler()
 	req := &types.ChatRequest{
 		Model: "test-model",
 		Messages: []types.Message{
@@ -254,7 +246,7 @@ func TestBuildRequestBody_JsonStructure(t *testing.T) {
 		"extra_str":  "test",
 	}
 
-	body, err := handler.BuildRequestBodyForTest(req, extraFields)
+	body, err := core.BuildRequestBody(req, extraFields)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

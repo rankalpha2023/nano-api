@@ -1,4 +1,4 @@
-package core_test
+package engine_test
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"nano-api/core"
+	"nano-api/engine"
 	"nano-api/types"
 )
 
@@ -34,7 +34,7 @@ func TestSendRequest_Basic(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{
 		Model:    "test",
 		Messages: []types.Message{{Role: "user", Content: "hi"}},
@@ -64,7 +64,7 @@ func TestSendRequest_CustomHeaders(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 	customHeaders := map[string]string{"X-Custom": "custom-value"}
 
@@ -81,7 +81,7 @@ func TestSendRequest_Proxy(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	// 传入空字符串 proxy — 不使用代理
@@ -92,7 +92,7 @@ func TestSendRequest_Proxy(t *testing.T) {
 }
 
 func TestSendRequest_InvalidURL(t *testing.T) {
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	// 无效 URL: 包含空格
@@ -109,7 +109,7 @@ func TestSendRequest_Timeout(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	// timeout=1 秒，mock 睡眠 2 秒 → 超时
@@ -135,7 +135,7 @@ func TestSendRequest_ExtraFieldsMerged(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 	extraFields := map[string]interface{}{"thinking_enabled": true}
 
@@ -163,7 +163,7 @@ func TestStreamResponse_Basic(t *testing.T) {
 		t.Fatalf("GET failed: %v", err)
 	}
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	var received []string
 	err = handler.StreamResponse(resp, func(choice *types.Choice) error {
 		if choice.Delta != nil && choice.Delta.Content != "" {
@@ -187,7 +187,7 @@ func TestStreamResponse_ReasoningContent(t *testing.T) {
 	defer mock.Close()
 
 	resp, _ := http.Get(mock.URL)
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 
 	var reasoning string
 	handler.StreamResponse(resp, func(choice *types.Choice) error {
@@ -209,7 +209,7 @@ func TestStreamResponse_NonStreamingBody(t *testing.T) {
 	defer mock.Close()
 
 	resp, _ := http.Get(mock.URL)
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 
 	err := handler.StreamResponse(resp, func(choice *types.Choice) error {
 		return nil
@@ -224,7 +224,7 @@ func TestStreamResponse_NonStreamingBody(t *testing.T) {
 // ============================================================
 
 func TestNewRequestHandler_NotNil(t *testing.T) {
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	if handler == nil {
 		t.Fatal("Expected non-nil handler")
 	}
@@ -235,7 +235,7 @@ func TestNewRequestHandler_NotNil(t *testing.T) {
 // ============================================================
 
 func TestSendRequest_ConnectionRefused(t *testing.T) {
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	// 未监听的端口
@@ -251,7 +251,7 @@ func TestSendRequest_WithValidProxyIgnored(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test"}
 
 	// 传入一个无法解析的 proxy — 应该被忽略
@@ -268,7 +268,7 @@ func TestStreamResponse_EmptyBody(t *testing.T) {
 	defer mock.Close()
 
 	resp, _ := http.Get(mock.URL)
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 
 	err := handler.StreamResponse(resp, func(choice *types.Choice) error {
 		return nil
@@ -286,7 +286,7 @@ func TestStreamResponse_CallbackError(t *testing.T) {
 	defer mock.Close()
 
 	resp, _ := http.Get(mock.URL)
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 
 	err := handler.StreamResponse(resp, func(choice *types.Choice) error {
 		return fmt.Errorf("callback abort")
@@ -302,7 +302,7 @@ func TestSendRequest_ExtraFieldsNil(t *testing.T) {
 	}))
 	defer mock.Close()
 
-	handler := core.NewRequestHandler()
+	handler := engine.NewRequestHandler()
 	req := &types.ChatRequest{Model: "test", Messages: []types.Message{{Role: "user", Content: "hi"}}}
 
 	// extraFields=nil 走快速路径

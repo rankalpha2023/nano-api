@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -351,8 +352,9 @@ func TestGetAllModels_Dedup(t *testing.T) {
 	am := NewAccountManager(cfg)
 
 	models := am.GetAllModels()
+	// 仅 1 个去重后的用户定义模型（gpt-4），不注入任何硬编码模型
 	if len(models) != 1 {
-		t.Errorf("Expected 1 model (deduplicated), got %d: %v", len(models), models)
+		t.Errorf("Expected 1 model (gpt-4 deduped), got %d: %v", len(models), models)
 	}
 	if models[0].ID != "gpt-4" {
 		t.Errorf("Expected gpt-4, got %s", models[0].ID)
@@ -378,8 +380,9 @@ func TestGetAllModels_MultipleProviders(t *testing.T) {
 	am := NewAccountManager(cfg)
 
 	models := am.GetAllModels()
+	// 仅 3 个用户定义的模型（gpt-4, claude, gemini），不注入任何硬编码模型
 	if len(models) != 3 {
-		t.Errorf("Expected 3 models, got %d", len(models))
+		t.Errorf("Expected 3 models (only configured), got %d", len(models))
 	}
 	for _, id := range []string{"gpt-4", "claude", "gemini"} {
 		found := false
@@ -497,5 +500,108 @@ func TestSendRequest_AllAccountFailed(t *testing.T) {
 	}
 	if handler != nil || account != nil {
 		t.Error("Expected nil handler+account when all failed")
+	}
+}
+
+// ============================================================
+// GetAllModels — 回归测试（P0：空配置不注入 Claude 内置模型）
+// ============================================================
+
+// TestGetAllModels_EmptyConfig_NoModels 验证空配置下 GetAllModels 返回空列表
+// 修复前：即使空配置也会注入 8 个 Claude 内置模型
+func TestGetAllModels_EmptyConfig_NoModels(t *testing.T) {
+	cfg := &types.Config{
+		RateLimit: types.RateLimitConfig{
+			MaxRequestsPerMinute: 40,
+			MinIntervalMs:        100,
+			RetryIntervalMs:      5000,
+		},
+		Providers: []types.ProviderConfig{},
+	}
+	am := NewAccountManager(cfg)
+	models := am.GetAllModels()
+	// 空配置不应注入任何内置模型
+	if len(models) != 0 {
+		t.Errorf("Expected 0 models for empty config, got %d", len(models))
+	}
+}
+
+// TestGetAllModels_WithProviders_OnlyConfiguredModels 验证模型列表只包含配置中声明的模型，
+// 不注入任何硬编码模型 ID（Claude 模型需通过配置显式声明）。
+func TestGetAllModels_WithProviders_OnlyConfiguredModels(t *testing.T) {
+	cfg := &types.Config{
+		RateLimit: types.RateLimitConfig{
+			MaxRequestsPerMinute: 40,
+			MinIntervalMs:        100,
+			RetryIntervalMs:      5000,
+		},
+		Providers: []types.ProviderConfig{
+			{
+				Name:          "p1",
+				BaseURL:       "http://localhost",
+				APIKeyEntries: []string{"k1"},
+				Models:        map[string]string{"gpt-4": "gpt-4"},
+			},
+		},
+	}
+	am := NewAccountManager(cfg)
+	models := am.GetAllModels()
+	// 只应返回配置中声明的 1 个模型，不注入任何硬编码模型
+	if len(models) != 1 {
+		t.Errorf("Expected 1 model (only configured), got %d", len(models))
+	}
+	if len(models) > 0 && models[0].ID != "gpt-4" {
+		t.Errorf("Expected model ID 'gpt-4', got '%s'", models[0].ID)
+	}
+	// 验证未配置的 Claude 模型不在列表中
+	for _, m := range models {
+		if strings.HasPrefix(m.ID, "claude-") {
+			t.Errorf("Claude model '%s' should not be injected without config", m.ID)
+		}
+	}
+}
+
+// TestGetAllModels_ConfiguredClaudeAlias 验证通过配置可以声明 Claude 模型别名，
+// 模型映射走配置而非硬编码。
+func TestGetAllModels_ConfiguredClaudeAlias(t *testing.T) {
+	cfg := &types.Config{
+		RateLimit: types.RateLimitConfig{
+			MaxRequestsPerMinute: 40,
+			MinIntervalMs:        100,
+			RetryIntervalMs:      5000,
+		},
+		Providers: []types.ProviderConfig{
+			{
+				Name:          "p1",
+				BaseURL:       "http://localhost",
+				APIKeyEntries: []string{"k1"},
+				// 通过配置显式声明 Claude 模型别名 → 内部模型映射
+				Models: map[string]string{
+					"claude-sonnet-4-6": "deepseek-v4-pro",
+					"claude-haiku-4-5":  "deepseek-v4-pro",
+				},
+			},
+		},
+	}
+	am := NewAccountManager(cfg)
+	models := am.GetAllModels()
+	// 应返回配置的 2 个 Claude 别名
+	if len(models) != 2 {
+		t.Errorf("Expected 2 configured aliases, got %d", len(models))
+	}
+	seen := map[string]bool{}
+	for _, m := range models {
+		seen[m.ID] = true
+	}
+	if !seen["claude-sonnet-4-6"] {
+		t.Error("Expected 'claude-sonnet-4-6' alias in model list")
+	}
+	if !seen["claude-haiku-4-5"] {
+		t.Error("Expected 'claude-haiku-4-5' alias in model list")
+	}
+
+	// 验证 Engine 层 GetRealModelName 能根据配置正确映射
+	if real := am.GetRealModelName("p1", "claude-sonnet-4-6"); real != "deepseek-v4-pro" {
+		t.Errorf("Expected claude-sonnet-4-6 -> deepseek-v4-pro, got '%s'", real)
 	}
 }

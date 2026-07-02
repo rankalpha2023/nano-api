@@ -46,3 +46,11 @@ Thumbs.db
 
 # Build artifacts
 nano-api
+nano-api-test
+
+# Test/coverage artifacts
+*_cov
+*_cov.out
+coverage
+coverage.*
+full_test.json

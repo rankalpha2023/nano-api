@@ -1,4 +1,4 @@
-package core
+package engine
 
 import (
 	"context"
@@ -7,9 +7,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// RateLimiter 限流管理器
+// RateLimiter 限流管理器（状态 + 阻塞副作用，属 Engine 层）。
+//
+// 架构注：从 core 层迁入 engine 层。Core 层禁止副作用与状态，
+// time.Sleep 与 rate.Limiter 的阻塞等待属副作用，归 Engine 层职责。
 type RateLimiter struct {
-	limiter *rate.Limiter
+	limiter     *rate.Limiter
 	minInterval time.Duration
 	lastRequest time.Time
 }
@@ -20,7 +23,7 @@ func NewRateLimiter(maxRequestsPerMinute, minIntervalMs int) *RateLimiter {
 	r := rate.Limit(float64(maxRequestsPerMinute) / 60.0)
 	// 创建令牌桶，桶容量为maxRequestsPerMinute
 	limiter := rate.NewLimiter(r, maxRequestsPerMinute)
-	
+
 	return &RateLimiter{
 		limiter:     limiter,
 		minInterval: time.Duration(minIntervalMs) * time.Millisecond,

@@ -65,6 +65,13 @@ type ChatTemplateKwargs struct {
 	ClearThinking  bool `json:"clear_thinking"`  // 是否清除思考
 }
 
+// Usage OpenAI token 用量信息
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
 // ChatResponse OpenAI聊天响应结构
 type ChatResponse struct {
 	ID      string   `json:"id"`      // 响应ID
@@ -72,6 +79,7 @@ type ChatResponse struct {
 	Created int64    `json:"created"` // 创建时间
 	Model   string   `json:"model"`   // 模型名称
 	Choices []Choice `json:"choices"` // 选择列表
+	Usage   *Usage   `json:"usage,omitempty"` // token 用量
 }
 
 // Choice 选择结构
@@ -89,12 +97,13 @@ type Delta struct {
 	ReasoningContent string `json:"reasoning_content,omitempty"` // 思考内容
 }
 
-// ModelInfo 模型信息（OpenAI /v1/models 格式）
+// ModelInfo 模型信息（OpenAI+Anthropic /v1/models 格式）
 type ModelInfo struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Created     int64  `json:"created"`
+	OwnedBy     string `json:"owned_by"`
+	DisplayName string `json:"display_name,omitempty"` // Anthropic 要求用于 gateway model discovery
 }
 
 // ModelListResponse /v1/models 响应
