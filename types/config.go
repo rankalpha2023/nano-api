@@ -4,7 +4,7 @@ package types
 type Config struct {
 	Providers         []ProviderConfig `json:"providers" yaml:"providers"`             // 提供商配置
 	Port              int              `json:"port" yaml:"port"`                       // 服务器端口
-	RequestRetry      int              `json:"requestRetry" yaml:"requestRetry"`       // 请求失败时的重试次数
+	RequestRetry      int              `json:"requestRetry" yaml:"request-retry"`       // 请求失败时的重试次数
 	RateLimit         RateLimitConfig  `json:"rate-limit" yaml:"rate-limit"`           // 全局限流配置
 	GlobalModelConfig ModelConfig      `json:"global-model-config" yaml:"global-model-config"` // 全局模型参数默认值
 	GlobalTimeout     int              `json:"global-timeout" yaml:"global-timeout"`   // 全局请求超时(秒)

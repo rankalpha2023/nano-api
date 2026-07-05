@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -65,13 +67,20 @@ func TestF1_TransportReuse_DifferentProxy(t *testing.T) {
 	}
 }
 
-// TestF1_TransportConfig_IdleConnTimeout 验证 IdleConnTimeout 被调整为 30s（非默认 90s）
+// TestF1_TransportConfig_IdleConnTimeout 验证 IdleConnTimeout 被调整为 10s（非默认 90s）
+//
+// 调小 IdleConnTimeout 至 10s 的原因：
+//   - 上游（如 sensenova）会主动关闭空闲 keep-alive 连接（无 timeout 头提示），
+//     导致 Transport 连接池中积累 stale 连接。
+//   - 调小 timeout 能显著降低"取到已被上游关闭的连接"的概率。
+//   - 即使取到 stale 连接，sendWithRetry 中的 CloseIdleConnections 修复
+//     也会清空整个连接池，确保重试走全新连接。
 func TestF1_TransportConfig_IdleConnTimeout(t *testing.T) {
 	handler := engine.NewRequestHandler()
 	tr := handler.GetTransportForTest("http://upstream", "")
 
-	if tr.IdleConnTimeout != 30*time.Second {
-		t.Errorf("Expected IdleConnTimeout=30s, got %v", tr.IdleConnTimeout)
+	if tr.IdleConnTimeout != 10*time.Second {
+		t.Errorf("Expected IdleConnTimeout=10s, got %v", tr.IdleConnTimeout)
 	}
 }
 
@@ -85,13 +94,18 @@ func TestF1_TransportConfig_MaxIdleConnsPerHost(t *testing.T) {
 	}
 }
 
-// TestF1_TransportConfig_ForceAttemptHTTP2 验证 ForceAttemptHTTP2 为 true（保留默认值）
-func TestF1_TransportConfig_ForceAttemptHTTP2(t *testing.T) {
+// TestF1_TransportConfig_HTTP2Preserved 验证 ForceAttemptHTTP2=true（保留默认值）。
+//
+// 设计：buildTransport 不强制 HTTP/1.1，而是让 HTTP/2 ALPN 协商正常进行。
+// 历史上曾误判为"上游 HTTP/2 兼容性问题导致 EOF"而强制 HTTP/1.1，
+// 经实测证伪后已撤销。EOF 的真正根因是 http.Request 未设置 GetBody，
+// 已在 SendRequest 中修复。
+func TestF1_TransportConfig_HTTP2Preserved(t *testing.T) {
 	handler := engine.NewRequestHandler()
 	tr := handler.GetTransportForTest("http://upstream", "")
 
 	if !tr.ForceAttemptHTTP2 {
-		t.Error("Expected ForceAttemptHTTP2=true (inherited from DefaultTransport)")
+		t.Error("Expected ForceAttemptHTTP2=true (HTTP/2 ALPN preserved, not forced to HTTP/1.1)")
 	}
 }
 
@@ -115,11 +129,11 @@ func TestF1_TransportConfig_WithProxy(t *testing.T) {
 	}
 
 	// 同时验证其他配置字段仍然完整（非零值）
-	if tr.IdleConnTimeout != 30*time.Second {
-		t.Errorf("Expected IdleConnTimeout=30s even with proxy, got %v", tr.IdleConnTimeout)
+	if tr.IdleConnTimeout != 10*time.Second {
+		t.Errorf("Expected IdleConnTimeout=10s even with proxy, got %v", tr.IdleConnTimeout)
 	}
 	if !tr.ForceAttemptHTTP2 {
-		t.Error("Expected ForceAttemptHTTP2=true even with proxy")
+		t.Error("Expected ForceAttemptHTTP2=true even with proxy (HTTP/2 preserved)")
 	}
 	if tr.TLSHandshakeTimeout == 0 {
 		t.Error("Expected non-zero TLSHandshakeTimeout even with proxy")
@@ -133,17 +147,84 @@ func TestF1_TransportConfig_InvalidProxyIgnored(t *testing.T) {
 	tr := handler.GetTransportForTest("http://upstream", "://invalid")
 
 	// 无效 proxy 应被忽略，其他配置仍应完整
-	if tr.IdleConnTimeout != 30*time.Second {
-		t.Errorf("Expected IdleConnTimeout=30s even with invalid proxy, got %v", tr.IdleConnTimeout)
+	if tr.IdleConnTimeout != 10*time.Second {
+		t.Errorf("Expected IdleConnTimeout=10s even with invalid proxy, got %v", tr.IdleConnTimeout)
 	}
 	if tr.MaxIdleConnsPerHost != 8 {
 		t.Errorf("Expected MaxIdleConnsPerHost=8 even with invalid proxy, got %d", tr.MaxIdleConnsPerHost)
 	}
 	if !tr.ForceAttemptHTTP2 {
-		t.Error("Expected ForceAttemptHTTP2=true even with invalid proxy")
+		t.Error("Expected ForceAttemptHTTP2=true even with invalid proxy (HTTP/2 preserved)")
 	}
 	if tr.TLSHandshakeTimeout == 0 {
 		t.Error("Expected non-zero TLSHandshakeTimeout even with invalid proxy")
+	}
+	// 无效 proxy 也应显式禁用代理，不能误用环境变量代理
+	if tr.Proxy != nil {
+		t.Error("Expected Proxy=nil even with invalid proxy (must not fall back to env proxy)")
+	}
+}
+
+// TestF1_TransportConfig_EmptyProxy_IgnoresEnvProxy 验证启动场景差异 BUG 的修复：
+// 当配置 proxy="" 时，即使进程环境变量设置了 HTTP_PROXY/HTTPS_PROXY，
+// Transport 也不应使用任何代理。
+//
+// 历史 BUG：buildTransport 在 proxy="" 时未显式设置 t.Proxy，导致
+// DefaultTransport.Clone() 继承的 Proxy: ProxyFromEnvironment 生效。
+// 从 VNC 桌面会话启动 nano-api 时，桌面会话继承了 xray/clash 等本地代理
+// 设置的 HTTPS_PROXY 环境变量，所有 HTTPS 请求被转发到本地代理（如
+// 127.0.0.1:16808）。该代理对部分上游的 SSL 处理失败（SSL_ERROR_SYSCALL），
+// 导致持续 EOF。而从 SSH 启动则因无代理环境变量而正常。
+//
+// 修复：proxy="" 时显式 t.Proxy = nil，强制直连，与启动场景无关。
+func TestF1_TransportConfig_EmptyProxy_IgnoresEnvProxy(t *testing.T) {
+	// 设置环境变量模拟 VNC 桌面会话
+	envVars := map[string]string{
+		"HTTP_PROXY":  "http://127.0.0.1:16808/",
+		"HTTPS_PROXY": "http://127.0.0.1:16808/",
+		"http_proxy":  "http://127.0.0.1:16808/",
+		"https_proxy": "http://127.0.0.1:16808/",
+		"NO_PROXY":    "localhost,127.0.0.0/8,::1",
+		"no_proxy":    "localhost,127.0.0.0/8,::1",
+	}
+	for k, v := range envVars {
+		old := os.Getenv(k)
+		os.Setenv(k, v)
+		defer os.Setenv(k, old)
+	}
+
+	handler := engine.NewRequestHandler()
+	tr := handler.GetTransportForTest("https://token.sensenova.cn/v1", "")
+
+	if tr.Proxy != nil {
+		t.Errorf("Expected Proxy=nil when config proxy is empty (even with env vars set), got non-nil Proxy")
+	}
+}
+
+// TestF1_TransportConfig_WithProxy_OverridesEnvProxy 验证配置 proxy 不为空时，
+// 显式覆盖环境变量代理（用户配置优先于环境变量）。
+func TestF1_TransportConfig_WithProxy_OverridesEnvProxy(t *testing.T) {
+	os.Setenv("HTTPS_PROXY", "http://127.0.0.1:16808/")
+	defer os.Unsetenv("HTTPS_PROXY")
+
+	handler := engine.NewRequestHandler()
+	tr := handler.GetTransportForTest("https://upstream", "http://my-proxy:9090")
+
+	if tr.Proxy == nil {
+		t.Fatal("Expected non-nil Proxy when config proxy is set")
+	}
+
+	// 验证 Proxy 是配置的代理，而不是环境变量中的代理
+	req := &http.Request{URL: &url.URL{Scheme: "https", Host: "upstream"}}
+	url, err := tr.Proxy(req)
+	if err != nil {
+		t.Fatalf("Proxy function error: %v", err)
+	}
+	if url == nil {
+		t.Fatal("Expected proxy URL from config, got nil")
+	}
+	if url.Host != "my-proxy:9090" {
+		t.Errorf("Expected proxy host my-proxy:9090 (from config), got %s (maybe from env)", url.Host)
 	}
 }
 

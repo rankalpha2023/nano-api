@@ -73,6 +73,60 @@ providers:
 	}
 }
 
+// TestLoadConfig_YAML_RequestRetryTag 回归测试：验证 YAML 中 `request-retry` (dash 风格)
+// 能正确加载到 Config.RequestRetry 字段。
+//
+// 历史 BUG：types.Config.RequestRetry 的 yaml tag 曾误写为 `yaml:"requestRetry"`
+// (camelCase)，但 config.example.yaml 与 README 文档均使用 `request-retry` (dash) 风格。
+// yaml.v3 不会自动把 dash 转成 camelCase，导致该字段被静默忽略，RequestRetry 永远为 0，
+// 进而使 NewRequestHandlerWithRetry(0) 完全禁用 F2 重试逻辑。
+//
+// 现象：在 Windows 平台恰好上游可用时不易察觉；当部署到 Ubuntu 主机遇到上游偶发 EOF 时，
+// 因重试被禁用，第一次 EOF 即直接失败（无 [Retry] 日志），表现为 server.log 中
+// "Error sending request to marvis: Post ...: EOF"。
+func TestLoadConfig_YAML_RequestRetryTag(t *testing.T) {
+	dir := makeTempDir(t)
+	p := filepath.Join(dir, "config.yaml")
+
+	// 与 config.example.yaml 顶层 retry 字段写法保持一致：dash 风格
+	os.WriteFile(p, []byte(`
+port: 8080
+request-retry: 5
+rate-limit:
+  maxRequestsPerMinute: 40
+  minIntervalMs: 100
+  retryIntervalMs: 5000
+providers: []
+`), 0644)
+
+	cfg, err := LoadConfig(p)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.RequestRetry != 5 {
+		t.Errorf("Expected RequestRetry=5 (loaded from YAML key 'request-retry'), got %d. "+
+			"This indicates the yaml tag in types.Config.RequestRetry is broken again.",
+			cfg.RequestRetry)
+	}
+}
+
+// TestLoadConfig_JSON_RequestRetryField 验证 JSON 路径下 RequestRetry 仍能正常加载
+// （JSON tag 为 `requestRetry` camelCase，保持向后兼容）。
+func TestLoadConfig_JSON_RequestRetryField(t *testing.T) {
+	dir := makeTempDir(t)
+	p := filepath.Join(dir, "config.json")
+
+	os.WriteFile(p, []byte(`{"port":8080,"requestRetry":4,"rate-limit":{"maxRequestsPerMinute":40,"minIntervalMs":100,"retryIntervalMs":5000},"providers":[]}`), 0644)
+
+	cfg, err := LoadConfig(p)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.RequestRetry != 4 {
+		t.Errorf("Expected RequestRetry=4 from JSON 'requestRetry' key, got %d", cfg.RequestRetry)
+	}
+}
+
 func TestLoadConfig_YAML_PrefersConfigYAML(t *testing.T) {
 	dir := makeTempDir(t)
 	os.WriteFile(filepath.Join(dir, "config.yaml"),
